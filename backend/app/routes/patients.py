@@ -1,14 +1,14 @@
 from flask import Blueprint, request, jsonify
 from bson import ObjectId
 from bson.errors import InvalidId
-from ..database import mongo
+from ..database import db
 from ..models.patient import PatientModel
 
 patients_bp = Blueprint("patients", __name__)
 
 @patients_bp.route("/", methods=["GET"])
 def get_patients():
-    docs = list(mongo.db[PatientModel.COLLECTION].find().sort("name", 1))
+    docs = list(db[PatientModel.COLLECTION].find().sort("name", 1))
     return jsonify([PatientModel.serialize(d) for d in docs]), 200
 
 @patients_bp.route("/", methods=["POST"])
@@ -18,22 +18,19 @@ def create_patient():
     missing = [f for f in required if not data.get(f)]
     if missing:
         return jsonify({"error": f"Missing fields: {missing}"}), 400
-
     doc = PatientModel.create_document(
-        name=data["name"],
-        dob=data["dob"],
-        phone=data["phone"],
-        email=data["email"],
+        name=data["name"], dob=data["dob"],
+        phone=data["phone"], email=data["email"],
         medical_notes=data.get("medical_notes", ""),
     )
-    result = mongo.db[PatientModel.COLLECTION].insert_one(doc)
+    result = db[PatientModel.COLLECTION].insert_one(doc)
     doc["_id"] = str(result.inserted_id)
     return jsonify(doc), 201
 
 @patients_bp.route("/<patient_id>", methods=["GET"])
 def get_patient(patient_id):
     try:
-        doc = mongo.db[PatientModel.COLLECTION].find_one({"_id": ObjectId(patient_id)})
+        doc = db[PatientModel.COLLECTION].find_one({"_id": ObjectId(patient_id)})
     except InvalidId:
         return jsonify({"error": "Invalid ID"}), 400
     if not doc:

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from bson import ObjectId
 from bson.errors import InvalidId
-from ..database import mongo
+from ..database import db
 from ..models.appointment import AppointmentModel
 
 appointments_bp = Blueprint("appointments", __name__)
@@ -10,13 +10,13 @@ appointments_bp = Blueprint("appointments", __name__)
 def get_appointments():
     patient_id = request.args.get("patient_id")
     query = {"patient_id": patient_id} if patient_id else {}
-    docs = list(mongo.db[AppointmentModel.COLLECTION].find(query).sort("date", 1))
+    docs = list(db[AppointmentModel.COLLECTION].find(query).sort("date", 1))
     return jsonify([AppointmentModel.serialize(d) for d in docs]), 200
 
 @appointments_bp.route("/<appointment_id>", methods=["GET"])
 def get_appointment(appointment_id):
     try:
-        doc = mongo.db[AppointmentModel.COLLECTION].find_one({"_id": ObjectId(appointment_id)})
+        doc = db[AppointmentModel.COLLECTION].find_one({"_id": ObjectId(appointment_id)})
     except InvalidId:
         return jsonify({"error": "Invalid ID"}), 400
     if not doc:
@@ -30,9 +30,8 @@ def create_appointment():
     missing = [f for f in required if not data.get(f)]
     if missing:
         return jsonify({"error": f"Missing fields: {missing}"}), 400
-
     doc = AppointmentModel.create_document(**{k: data[k] for k in required})
-    result = mongo.db[AppointmentModel.COLLECTION].insert_one(doc)
+    result = db[AppointmentModel.COLLECTION].insert_one(doc)
     doc["_id"] = str(result.inserted_id)
     return jsonify(doc), 201
 
@@ -43,17 +42,14 @@ def update_appointment(appointment_id):
     updates = {k: data[k] for k in allowed if k in data}
     if not updates:
         return jsonify({"error": "No valid fields to update"}), 400
-
     from datetime import datetime
     updates["updated_at"] = datetime.utcnow().isoformat()
-
     try:
-        result = mongo.db[AppointmentModel.COLLECTION].update_one(
+        result = db[AppointmentModel.COLLECTION].update_one(
             {"_id": ObjectId(appointment_id)}, {"$set": updates}
         )
     except InvalidId:
         return jsonify({"error": "Invalid ID"}), 400
-
     if result.matched_count == 0:
         return jsonify({"error": "Appointment not found"}), 404
     return jsonify({"message": "Updated successfully"}), 200
@@ -61,7 +57,7 @@ def update_appointment(appointment_id):
 @appointments_bp.route("/<appointment_id>", methods=["DELETE"])
 def delete_appointment(appointment_id):
     try:
-        result = mongo.db[AppointmentModel.COLLECTION].delete_one({"_id": ObjectId(appointment_id)})
+        result = db[AppointmentModel.COLLECTION].delete_one({"_id": ObjectId(appointment_id)})
     except InvalidId:
         return jsonify({"error": "Invalid ID"}), 400
     if result.deleted_count == 0:
